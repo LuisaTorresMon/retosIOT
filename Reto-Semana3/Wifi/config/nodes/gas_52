@@ -1,0 +1,10 @@
+List of parameters
+------------------------------------------
+device_type:2
+device_id:52
+device_longitude:-74.06633198261261
+device_latitude:4.604684935496883
+device_elevation:0.0
+device_radius:10.0
+device_hide:4
+natural_event_file_name:PrimerEventoFuego.evt
