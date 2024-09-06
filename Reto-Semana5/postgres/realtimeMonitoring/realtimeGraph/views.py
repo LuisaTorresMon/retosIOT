@@ -734,7 +734,7 @@ class MeasurementSumView(TemplateView):
             #for measurement in measurements:
              #   print(f'Processing measurement: {measurement.name}')
             data_stats = Data.objects.filter(
-                station=station, measurement=measurement_name,
+                station=station, measurement=1,
                 time__gte=from_date.date(), time__lte=to_date.date()
             ).aggregate(
                 avg_value=Avg('value'),
