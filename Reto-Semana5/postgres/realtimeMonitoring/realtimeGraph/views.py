@@ -674,67 +674,65 @@ Filtro para formatear datos en los templates
 def add_str(str1, str2):
     return str1 + str2
 
-@method_decorator(csrf_exempt, name='dispatch')
-class MeasurementSumView(TemplateView):
-    template_name = "sum_stats.html"
+def get(self, request, **kwargs):
+    city_name = request.GET.get('city')
+    state_name = request.GET.get('state')
+    country_name = request.GET.get('country')
+    from_ts = request.GET.get('from')
+    to_ts = request.GET.get('to')
+    measurement_name = request.GET.get('measurement')
 
-    def get(self, request, **kwargs):
-        city_name = request.GET.get('city')
-        state_name = request.GET.get('state')
-        country_name = request.GET.get('country')
-        from_ts = request.GET.get('from')
-        to_ts = request.GET.get('to')
-        measurement_name = request.GET.get('measurement')
+    if from_ts is None and to_ts is None:
+        from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp() * 1000)
+        to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp() * 1000)
+    elif to_ts is None:
+        to_ts = str(datetime.now().timestamp() * 1000)
+    elif from_ts is None:
+        from_ts = "0"  # Usar el epoch timestamp
 
-        if from_ts is None and to_ts is None:
-            from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp())
-            to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp())
-        elif to_ts is None:
-            to_ts = str(datetime.now().timestamp())
-        elif from_ts is None:
-            from_ts = str(datetime.fromtimestamp(0).timestamp())
+    # Convertir timestamps a float y manejar posibles errores
+    try:
+        from_ts = float(from_ts) / 1000  # Convertir de milisegundos a segundos
+        to_ts = float(to_ts) / 1000  # Convertir de milisegundos a segundos
+    except (ValueError, TypeError) as e:
+        return JsonResponse({"error": "Formato de timestamp no válido."}, status=400)
 
-        # Convert to float and handle potential errors
-        try:
-            from_ts = float(from_ts) / 1000  # Convert from milliseconds to seconds
-            to_ts = float(to_ts) / 1000  # Convert from milliseconds to seconds
-        except ValueError:
-            return JsonResponse({"error": "Invalid timestamp format."}, status=400)
-
+    try:
         from_date = datetime.fromtimestamp(from_ts)
         to_date = datetime.fromtimestamp(to_ts)
+    except (OSError, OverflowError) as e:
+        return JsonResponse({"error": "Error al convertir timestamps a fechas."}, status=400)
 
-        start_ts = int(from_date.timestamp() * 1000000)  # Convert to microseconds for the database query
-        end_ts = int(to_date.timestamp() * 1000000)  # Convert to microseconds for the database query
+    start_ts = int(from_date.timestamp() * 1000000)  # Convertir a microsegundos
+    end_ts = int(to_date.timestamp() * 1000000)  # Convertir a microsegundos
 
-        try:
-            location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
-            station = Station.objects.get(location=location)
-            measurement = Measurement.objects.get(name=measurement_name)
+    try:
+        location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
+        station = Station.objects.get(location=location)
+        measurement = Measurement.objects.get(name=measurement_name)
 
-            data_stats = Data.objects.filter(
-                station=station, measurement=measurement,
-                time__gte=start_ts, time__lte=end_ts
-            ).aggregate(
-                Sum('avg_value'),
-                Count('time')
-            )
+        data_stats = Data.objects.filter(
+            station=station, measurement=measurement,
+            time__gte=start_ts, time__lte=end_ts
+        ).aggregate(
+            Sum('avg_value'),
+            Count('time')
+        )
 
-            result = {
-                "location": f"{city_name}, {state_name}, {country_name}",
-                "from": from_ts,
-                "to": to_ts,
-                "measurement": measurement_name,
-                "total_sum": data_stats['avg_value__sum'],
-                "total_count": data_stats['time__count']
-            }
+        result = {
+            "location": f"{city_name}, {state_name}, {country_name}",
+            "from": from_ts,
+            "to": to_ts,
+            "measurement": measurement_name,
+            "total_sum": data_stats['avg_value__sum'],
+            "total_count": data_stats['time__count']
+        }
 
-            return JsonResponse(result)
-        except Location.DoesNotExist:
-            return JsonResponse({"error": "Ubicacion no encontrada."}, status=404)
-        except Station.DoesNotExist:
-            return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
-        except Measurement.DoesNotExist:
-            return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
-
+        return JsonResponse(result)
+    except Location.DoesNotExist:
+        return JsonResponse({"error": "Ubicacion no encontrada."}, status=404)
+    except Station.DoesNotExist:
+        return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
+    except Measurement.DoesNotExist:
+        return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
         
