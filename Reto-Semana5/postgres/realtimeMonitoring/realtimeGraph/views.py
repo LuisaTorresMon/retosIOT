@@ -700,6 +700,9 @@ class MeasurementSumView(TemplateView):
         from_date = datetime.fromtimestamp(float(from_ts) / 1000)
         to_date = datetime.fromtimestamp(float(to_ts) / 1000)
 
+        start_ts = int(from_date.timestamp() * 1000000)
+        end_ts = int(to_date.timestamp() * 1000000)
+
         try:
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
             station = Station.objects.get(location=location)
@@ -707,7 +710,7 @@ class MeasurementSumView(TemplateView):
 
             data_stats = Data.objects.filter(
                 station=station, measurement=measurement,
-                time__gte=from_date.date(), time__lte=to_date.date()
+                time__gte=start_ts, time__lte=end_ts
             ).aggregate(
                 Sum('avg_value'),
                 Count('time')
