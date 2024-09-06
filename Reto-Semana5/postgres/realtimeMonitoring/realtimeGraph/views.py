@@ -685,6 +685,7 @@ class MeasurementSumView(TemplateView):
         country_name = request.GET.get('country')
         from_ts = request.GET.get('from')
         to_ts = request.GET.get('to')
+        measurement_name = request.GET.get('measurement')
 
         # Imprime los parámetros para depuración
         print(f'City: {city_name}, State: {state_name}, Country: {country_name}, From_timestamp: {from_ts}, To_timestamp: {to_ts}')
@@ -710,6 +711,8 @@ class MeasurementSumView(TemplateView):
             print(f'Location found: {location}')
             station = Station.objects.get(location=location)
             print(f'Station found: {station}')
+            measurement = Measurement.objects.get(name=measurement_name)
+            print(f'Measurement found: {measurement}')
             
             # Filtra las mediciones para la estación dentro del rango de tiempo
             measurements = Measurement.objects.filter(
@@ -728,27 +731,27 @@ class MeasurementSumView(TemplateView):
             }
 
             # Itera sobre las mediciones y agrega las estadísticas
-            for measurement in measurements:
-                print(f'Processing measurement: {measurement.name}')
-                data_stats = Data.objects.filter(
-                    station=station, measurement=measurement,
-                    time__gte=from_date.date(), time__lte=to_date.date()
-                ).aggregate(
-                    avg_value=Avg('value'),
-                    max_value=Max('value'),
-                    min_value=Min('value'),
-                    count_time=Count('time')
-                )
-                print(f'Data stats: {data_stats}')
+            #for measurement in measurements:
+             #   print(f'Processing measurement: {measurement.name}')
+            data_stats = Data.objects.filter(
+                station=station, measurement=measurement_name,
+                time__gte=from_date.date(), time__lte=to_date.date()
+            ).aggregate(
+                avg_value=Avg('value'),
+                max_value=Max('value'),
+                min_value=Min('value'),
+                count_time=Count('time')
+            )
+              #  print(f'Data stats: {data_stats}')
 
                 # Agrega la información de la medición al resultado
-                result["measurements"].append({
-                    "type": measurement.name,
-                    "average": data_stats['avg_value'],
-                    "max": data_stats['max_value'],
-                    "min": data_stats['min_value'],
-                    "total_count": data_stats['count_time']
-                })
+            result["measurements"].append({
+                "type": measurement_name,
+                "average": data_stats['avg_value'],
+                "max": data_stats['max_value'],
+                "min": data_stats['min_value'],
+                "total_count": data_stats['count_time']
+            })
 
             print(f'Final result: {result}')
             return JsonResponse(result)
