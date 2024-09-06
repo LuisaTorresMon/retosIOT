@@ -679,7 +679,6 @@ class MeasurementSumView(TemplateView):
     template_name = "sum_stats.html"
 
     def get(self, request, **kwargs):
-        # Recibe los parámetros de la URL
         city_name = request.GET.get('city')
         state_name = request.GET.get('state')
         country_name = request.GET.get('country')
@@ -687,10 +686,8 @@ class MeasurementSumView(TemplateView):
         to_ts = request.GET.get('to')
         measurement_name = request.GET.get('measurement')
 
-        # Imprime los parámetros para depuración
         print(f'City: {city_name}, State: {state_name}, Country: {country_name}, From_timestamp: {from_ts}, To_timestamp: {to_ts}')
         
-        # Valida y asigna las fechas si no se proporcionan
         now = datetime.now()
         if not from_ts and not to_ts:
             from_ts = (now - dateutil.relativedelta.relativedelta(weeks=1)).timestamp() * 1000
@@ -700,13 +697,11 @@ class MeasurementSumView(TemplateView):
         elif not from_ts:
             from_ts = datetime.fromtimestamp(0).timestamp() * 1000
 
-        # Convierte los timestamps a datetime
         from_date = datetime.fromtimestamp(float(from_ts) / 1000)
         to_date = datetime.fromtimestamp(float(to_ts) / 1000)
         print(f'From_date: {from_date}, To_date: {to_date}')
 
         try:
-            # Consulta la ubicación y la estación relacionada
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
             print(f'Location found: {location}')
             station = Station.objects.get(location=location)
@@ -714,7 +709,6 @@ class MeasurementSumView(TemplateView):
             measurement = Measurement.objects.get(name=measurement_name)
             print(f'Measurement found: {measurement}')
             
-            # Filtra las mediciones para la estación dentro del rango de tiempo
             measurements = Measurement.objects.filter(
                 data__station=station,
                 data__time__gte=from_date.date(),
@@ -722,7 +716,6 @@ class MeasurementSumView(TemplateView):
             ).distinct()
             print(f'Measurements found: {measurements}')
 
-            # Prepara la estructura del resultado
             result = {
                 "location": f"{city_name}, {state_name}, {country_name}",
                 "from": from_ts,
@@ -730,9 +723,6 @@ class MeasurementSumView(TemplateView):
                 "measurements": []
             }
 
-            # Itera sobre las mediciones y agrega las estadísticas
-            #for measurement in measurements:
-             #   print(f'Processing measurement: {measurement.name}')
             data_stats = Data.objects.filter(
                 station=station, measurement=1,
                 time__gte=from_date.date(), time__lte=to_date.date()
@@ -742,9 +732,7 @@ class MeasurementSumView(TemplateView):
                 min_value=Min('value'),
                 count_time=Count('time')
             )
-              #  print(f'Data stats: {data_stats}')
 
-                # Agrega la información de la medición al resultado
             result["measurements"].append({
                 "type": measurement_name,
                 "average": data_stats['avg_value'],
@@ -761,3 +749,5 @@ class MeasurementSumView(TemplateView):
             return JsonResponse({"error": "Ubicación no encontrada."}, status=404)
         except Station.DoesNotExist:
             return JsonResponse({"error": "Estación no encontrada para esa ubicación."}, status=404)
+        except Measurement.DoesNotExist:
+            return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
