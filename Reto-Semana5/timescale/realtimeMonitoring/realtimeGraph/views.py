@@ -775,72 +775,77 @@ def add_str(str1, str2):
 class MeasurementSumView(TemplateView):
     template_name = "sum_stats.html"
 
+    """
+    Get de /stats. Se muestra por el momento una vista sin datos.
+    """
     def get(self, request, **kwargs):
         city_name = request.GET.get('city')
         state_name = request.GET.get('state')
         country_name = request.GET.get('country')
         from_ts = request.GET.get('from')
         to_ts = request.GET.get('to')
-        measurement_name = request.GET.get('measurement')
-
-        # Validate required query parameters
-        if not city_name or not state_name or not country_name or not measurement_name:
-            return JsonResponse({"error": "Missing required query parameters."}, status=400)
-
-        # Set default values for 'from' and 'to' if not provided
-        if from_ts is None and to_ts is None:
+        print(f'City: {city_name}, State: {state_name}, Country: {country_name}, From_timestamp: {from_ts}, To_timestamp: {to_ts}')
+        
+        #Valida si las fechas están presentes
+        if from_ts == None and to_ts == None:
             from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp())
             to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp())
-        elif to_ts is None:
+        elif to_ts == None:
             to_ts = str(datetime.now().timestamp())
-        elif from_ts is None:
+        elif from_ts == None:
             from_ts = str(datetime.fromtimestamp(0).timestamp())
 
-        # Convert timestamps to float and handle invalid format
+        # Convierte timestamps a datetime
+        from_date = datetime.fromtimestamp(float(from_ts) / 1000)
+        to_date = datetime.fromtimestamp(float(to_ts) / 1000)
+
+        print(f'From_date: {from_date}, To_date: {to_date}')
+
+        # Consulta la base de datos for la ubicación y estación relacionadas
         try:
-            from_ts = float(from_ts) / 1000  # Convert from milliseconds to seconds
-            to_ts = float(to_ts) / 1000  # Convert from milliseconds to seconds
-        except ValueError:
-            return JsonResponse({"error": "Invalid timestamp format."}, status=400)
-
-        from_date = datetime.fromtimestamp(from_ts)
-        to_date = datetime.fromtimestamp(to_ts)
-
-        # Convert to microseconds for the database query
-        start_ts = int(from_date.timestamp() * 1000000)
-        end_ts = int(to_date.timestamp() * 1000000)
-
-        try:
-            # Validate that the location and measurement exist
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
+            print(f'Location: {location}')
             station = Station.objects.get(location=location)
-            measurement = Measurement.objects.get(name=measurement_name)
-
-            # Perform the query and aggregate the results
-            data_stats = Data.objects.filter(
-                station=station, measurement=measurement,
-                time__gte=start_ts, time__lte=end_ts
-            ).aggregate(
-                Sum('avg_value'),
-                Count('time')
-            )
+            print(f'Station: {location}')
+            measurements = Measurement.objects.filter(
+                data__station=station,
+                data__time__gte=from_date.date(),
+                data__time__lte=to_date.date()
+            ).distinct()
+            print(f'Measurements: {measurements}')
 
             result = {
                 "location": f"{city_name}, {state_name}, {country_name}",
                 "from": from_ts,
                 "to": to_ts,
-                "measurement": measurement_name,
-                "total_sum": data_stats['avg_value__sum'],
-                "total_count": data_stats['time__count']
+                "measurements": []
             }
+            print(f'Result: {result}')
 
+            for measurement in measurements:
+                print(f'Measurement name: {measurement.name}')
+                data_stats = Data.objects.filter(
+                    station=station, measurement=measurement,
+                    time__gte=from_date.date(), time__lte=to_date.date()
+                ).aggregate(
+                    Avg('value'),
+                    Max('value'),
+                    Min('value'),
+                    Count('time')
+                )
+                print(f'Data stats: {data_stats}')
+                result["measurements"].append({
+                    "type": measurement.name,
+                    "average": data_stats['value__avg'],
+                    "max": data_stats['value__max'],
+                    "min": data_stats['value__min'],
+                    "total_measurements": data_stats['time__count']
+                })
+            print(f'Result 2: {result}')
+            
             return JsonResponse(result)
         except Location.DoesNotExist:
             return JsonResponse({"error": "Ubicacion no encontrada."}, status=404)
         except Station.DoesNotExist:
             return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
-        except Measurement.DoesNotExist:
-            return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-
+        
