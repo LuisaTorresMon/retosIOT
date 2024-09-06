@@ -783,6 +783,11 @@ class MeasurementSumView(TemplateView):
         to_ts = request.GET.get('to')
         measurement_name = request.GET.get('measurement')
 
+        # Validate required query parameters
+        if not city_name or not state_name or not country_name or not measurement_name:
+            return JsonResponse({"error": "Missing required query parameters."}, status=400)
+
+        # Set default values for 'from' and 'to' if not provided
         if from_ts is None and to_ts is None:
             from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp())
             to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp())
@@ -791,24 +796,27 @@ class MeasurementSumView(TemplateView):
         elif from_ts is None:
             from_ts = str(datetime.fromtimestamp(0).timestamp())
 
-        # Convert to float and handle potential errors
+        # Convert timestamps to float and handle invalid format
         try:
-            from_ts = float(from_ts)
-            to_ts = float(to_ts)
+            from_ts = float(from_ts) / 1000  # Convert from milliseconds to seconds
+            to_ts = float(to_ts) / 1000  # Convert from milliseconds to seconds
         except ValueError:
             return JsonResponse({"error": "Invalid timestamp format."}, status=400)
 
         from_date = datetime.fromtimestamp(from_ts)
         to_date = datetime.fromtimestamp(to_ts)
 
+        # Convert to microseconds for the database query
         start_ts = int(from_date.timestamp() * 1000000)
         end_ts = int(to_date.timestamp() * 1000000)
 
         try:
+            # Validate that the location and measurement exist
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
             station = Station.objects.get(location=location)
             measurement = Measurement.objects.get(name=measurement_name)
 
+            # Perform the query and aggregate the results
             data_stats = Data.objects.filter(
                 station=station, measurement=measurement,
                 time__gte=start_ts, time__lte=end_ts
@@ -833,3 +841,6 @@ class MeasurementSumView(TemplateView):
             return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
         except Measurement.DoesNotExist:
             return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
