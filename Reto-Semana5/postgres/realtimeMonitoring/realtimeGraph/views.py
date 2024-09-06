@@ -696,16 +696,16 @@ class MeasurementSumView(TemplateView):
 
         # Convert to float and handle potential errors
         try:
-            from_ts = float(from_ts)
-            to_ts = float(to_ts)
+            from_ts = float(from_ts) / 1000  # Convert from milliseconds to seconds
+            to_ts = float(to_ts) / 1000  # Convert from milliseconds to seconds
         except ValueError:
             return JsonResponse({"error": "Invalid timestamp format."}, status=400)
 
         from_date = datetime.fromtimestamp(from_ts)
         to_date = datetime.fromtimestamp(to_ts)
 
-        start_ts = int(from_date.timestamp() * 1000000)
-        end_ts = int(to_date.timestamp() * 1000000)
+        start_ts = int(from_date.timestamp() * 1000000)  # Convert to microseconds for the database query
+        end_ts = int(to_date.timestamp() * 1000000)  # Convert to microseconds for the database query
 
         try:
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
@@ -736,4 +736,5 @@ class MeasurementSumView(TemplateView):
             return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
         except Measurement.DoesNotExist:
             return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
+
         
