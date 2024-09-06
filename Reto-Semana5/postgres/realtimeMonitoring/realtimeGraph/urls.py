@@ -14,5 +14,5 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('historical/data',
          download_csv_data, name='historical-data'),
-    path("stats", MeasurementSumView.as_view(), name="measurement-stats")
+    path("sum_stats", MeasurementSumView.as_view(), name="measurement-stats")
 ]
