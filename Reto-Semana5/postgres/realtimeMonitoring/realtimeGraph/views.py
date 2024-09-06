@@ -678,44 +678,48 @@ def add_str(str1, str2):
 class MeasurementSumView(TemplateView):
     template_name = "sum_stats.html"
 
-    """
-    Get de /sum_stats. Devuelve las estadísticas de todos los tipos de mediciones en un rango de fechas.
-    """
     def get(self, request, **kwargs):
+        # Recibe los parámetros de la URL
         city_name = request.GET.get('city')
         state_name = request.GET.get('state')
         country_name = request.GET.get('country')
         from_ts = request.GET.get('from')
         to_ts = request.GET.get('to')
 
-        # Valida si las fechas están presentes
-        if from_ts is None and to_ts is None:
-            from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp())
-            to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp())
-        elif to_ts is None:
-            to_ts = str(datetime.now().timestamp())
-        elif from_ts is None:
-            from_ts = str(datetime.fromtimestamp(0).timestamp())
+        # Imprime los parámetros para depuración
+        print(f'City: {city_name}, State: {state_name}, Country: {country_name}, From_timestamp: {from_ts}, To_timestamp: {to_ts}')
+        
+        # Valida y asigna las fechas si no se proporcionan
+        now = datetime.now()
+        if not from_ts and not to_ts:
+            from_ts = (now - dateutil.relativedelta.relativedelta(weeks=1)).timestamp() * 1000
+            to_ts = (now + dateutil.relativedelta.relativedelta(days=1)).timestamp() * 1000
+        elif not to_ts:
+            to_ts = now.timestamp() * 1000
+        elif not from_ts:
+            from_ts = datetime.fromtimestamp(0).timestamp() * 1000
 
-        # Convierte timestamps a datetime
+        # Convierte los timestamps a datetime
         from_date = datetime.fromtimestamp(float(from_ts) / 1000)
         to_date = datetime.fromtimestamp(float(to_ts) / 1000)
-
-        start_ts = int(from_date.timestamp() * 1000000)
-        end_ts = int(to_date.timestamp() * 1000000)
+        print(f'From_date: {from_date}, To_date: {to_date}')
 
         try:
             # Consulta la ubicación y la estación relacionada
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
+            print(f'Location found: {location}')
             station = Station.objects.get(location=location)
-
+            print(f'Station found: {station}')
+            
             # Filtra las mediciones para la estación dentro del rango de tiempo
             measurements = Measurement.objects.filter(
                 data__station=station,
                 data__time__gte=from_date.date(),
                 data__time__lte=to_date.date()
             ).distinct()
+            print(f'Measurements found: {measurements}')
 
+            # Prepara la estructura del resultado
             result = {
                 "location": f"{city_name}, {state_name}, {country_name}",
                 "from": from_ts,
@@ -725,27 +729,31 @@ class MeasurementSumView(TemplateView):
 
             # Itera sobre las mediciones y agrega las estadísticas
             for measurement in measurements:
+                print(f'Processing measurement: {measurement.name}')
                 data_stats = Data.objects.filter(
                     station=station, measurement=measurement,
-                    time__gte=start_ts, time__lte=end_ts
+                    time__gte=from_date.date(), time__lte=to_date.date()
                 ).aggregate(
-                    Sum('avg_value'),
-                    Max('avg_value'),
-                    Min('avg_value'),
-                    Count('time')
+                    avg_value=Avg('value'),
+                    max_value=Max('value'),
+                    min_value=Min('value'),
+                    count_time=Count('time')
                 )
+                print(f'Data stats: {data_stats}')
 
                 # Agrega la información de la medición al resultado
                 result["measurements"].append({
                     "type": measurement.name,
-                    "total_sum": data_stats['avg_value__sum'],
-                    "max": data_stats['avg_value__max'],
-                    "min": data_stats['avg_value__min'],
-                    "total_count": data_stats['time__count']
+                    "average": data_stats['avg_value'],
+                    "max": data_stats['max_value'],
+                    "min": data_stats['min_value'],
+                    "total_count": data_stats['count_time']
                 })
 
+            print(f'Final result: {result}')
             return JsonResponse(result)
 
+        # Manejo de errores
         except Location.DoesNotExist:
             return JsonResponse({"error": "Ubicación no encontrada."}, status=404)
         except Station.DoesNotExist:
