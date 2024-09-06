@@ -678,9 +678,6 @@ def add_str(str1, str2):
 class MeasurementSumView(TemplateView):
     template_name = "sum_stats.html"
 
-    """
-    Get de /sum_stats. Devuelve la suma total de un tipo de medición en un rango de fechas.
-    """
     def get(self, request, **kwargs):
         city_name = request.GET.get('city')
         state_name = request.GET.get('state')
@@ -689,19 +686,26 @@ class MeasurementSumView(TemplateView):
         to_ts = request.GET.get('to')
         measurement_name = request.GET.get('measurement')
 
-        if from_ts == None and to_ts == None:
+        if from_ts is None and to_ts is None:
             from_ts = str((datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)).timestamp())
             to_ts = str((datetime.now() + dateutil.relativedelta.relativedelta(days=1)).timestamp())
-        elif to_ts == None:
+        elif to_ts is None:
             to_ts = str(datetime.now().timestamp())
-        elif from_ts == None:
+        elif from_ts is None:
             from_ts = str(datetime.fromtimestamp(0).timestamp())
 
-        from_date = datetime.fromtimestamp(float(from_ts) / 1000)
-        to_date = datetime.fromtimestamp(float(to_ts) / 1000)
+        # Convert to float and handle potential errors
+        try:
+            from_ts = float(from_ts)
+            to_ts = float(to_ts)
+        except ValueError:
+            return JsonResponse({"error": "Invalid timestamp format."}, status=400)
 
-        start_ts = from_date.date()
-        end_ts = from_date.date()
+        from_date = datetime.fromtimestamp(from_ts)
+        to_date = datetime.fromtimestamp(to_ts)
+
+        start_ts = int(from_date.timestamp() * 1000000)
+        end_ts = int(to_date.timestamp() * 1000000)
 
         try:
             location = Location.objects.get(city__name=city_name, state__name=state_name, country__name=country_name)
@@ -732,3 +736,4 @@ class MeasurementSumView(TemplateView):
             return JsonResponse({"error": "Estacion no encontrada para esa ubicación."}, status=404)
         except Measurement.DoesNotExist:
             return JsonResponse({"error": "Tipo de medición no encontrado."}, status=404)
+        
